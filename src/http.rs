@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 use std::fmt;
-use std::str::Lines;
 use std::io::Error;
-use connection::Connection;
+use std::io::Read;
+use crate::connection::Connection;
+use failure::{Fallible, bail};
+use std::net::TcpStream;
 
 /// A URL type for requests.
 pub type URL = String;
@@ -152,23 +154,77 @@ pub struct Response {
     /// The headers of the response.
     pub headers: HashMap<String, String>,
     /// The body of the response.
-    pub body: String,
+    pub body: TcpStream,
 }
 
 impl Response {
-    pub(crate) fn from_string(response_text: String) -> Response {
-        let mut lines = response_text.lines();
-        let status_line = lines.next().unwrap_or("");
-        let (status_code, reason_phrase) = parse_status_line(status_line);
-        let (headers, body) = parse_http_response_content(lines);
-        Response {
+
+    pub (crate) fn from_stream(stream: TcpStream) -> Response {
+        parse_response(stream).unwrap()
+    }
+}
+
+fn parse_response(stream: TcpStream) -> Fallible<Response> {
+        // get http status line
+        let (status_code, reason_phrase) = parse_status_line(&read_http_status_line(&stream)?);
+        // get http headers
+        let headers = parse_headers(read_http_headers(&stream)?).unwrap();
+        //
+        // rest is body
+        let resp = Response {
             status_code,
             reason_phrase,
             headers,
-            body,
-        }
+            body: stream
+        };
+
+        Ok(resp)
+
+}
+
+fn parse_headers(s: String) -> Fallible<HashMap<String, String>> {
+    let headers = s.trim();
+
+    if headers.lines().all(|e| e.contains(':')) {
+        let headers: HashMap<String, String> = headers
+            .lines()
+            .map(|elem| {
+                let idx = elem.find(": ").unwrap();
+                let (key, value) = elem.split_at(idx);
+                (key.to_string(), value[2..].to_string())
+            })
+            .collect();
+
+        Ok(headers)
+    } else {
+        bail!("error parsing")
     }
 }
+
+fn read_http_status_line<T: Read>(stream: T) -> Result<String, Error> {
+    let mut buf: Vec<u8> = Vec::new();
+
+    for b in stream.bytes() {
+        buf.push(b?);
+        if buf.len() > 5 && &buf[(buf.len() - 2)..] == b"\r\n" {
+            break;
+        }
+    }
+    Ok(String::from_utf8(buf).unwrap())
+}
+
+fn read_http_headers<T: Read>(stream: T) -> Result<String, Error> {
+    let mut buf: Vec<u8> = Vec::new();
+
+    for b in stream.bytes() {
+        buf.push(b?);
+        if buf.len() > 5 && &buf[(buf.len() - 2)..] == b"\r\n\r\n" {
+            break;
+        }
+    }
+    Ok(String::from_utf8(buf).unwrap())
+}
+
 
 fn parse_url(url: URL) -> (URL, URL, bool) {
     let mut first = URL::new();
@@ -196,7 +252,7 @@ fn parse_url(url: URL) -> (URL, URL, bool) {
     (first, second, https)
 }
 
-fn parse_status_line(line: &str) -> (i32, String) {
+pub (crate) fn parse_status_line(line: &str) -> (i32, String) {
     let mut split = line.split(" ");
     if let Some(code) = split.nth(1) {
         if let Ok(code) = code.parse::<i32>() {
@@ -206,26 +262,4 @@ fn parse_status_line(line: &str) -> (i32, String) {
         }
     }
     (503, "Server did not provide a status line".to_string())
-}
-
-fn parse_http_response_content(lines: Lines) -> (HashMap<String, String>, String) {
-    let mut headers = HashMap::new();
-    let mut body = String::new();
-    let mut writing_headers = true;
-    for line in lines {
-        if line.is_empty() {
-            writing_headers = false;
-            continue;
-        }
-        if writing_headers {
-            if let Some(index) = line.find(":") {
-                let key = line[..index].trim().to_string();
-                let value = line[index..].trim().to_string();
-                headers.insert(key, value);
-            }
-        } else {
-            body += &format!("{}\r\n", line);
-        }
-    }
-    (headers, body)
 }

@@ -1,12 +1,12 @@
-use std::io::{BufReader, BufWriter, Error, ErrorKind, Read, Write};
+use std::io::{BufWriter, Error,  Write};
 use std::net::TcpStream;
 use std::time::Duration;
-use std::env;
-use http::{Request, Response};
-#[cfg(feature = "https")]
-use std::sync::Arc;
+use crate::http::{Request, Response};
 #[cfg(feature = "https")]
 use rustls::{self, ClientConfig, ClientSession};
+use std::env;
+#[cfg(feature = "https")]
+use std::sync::Arc;
 #[cfg(feature = "https")]
 use webpki::DNSNameRef;
 #[cfg(feature = "https")]
@@ -54,10 +54,7 @@ impl Connection {
         let mut stream = create_tcp_stream(host, self.timeout)?;
         let mut tls = rustls::Stream::new(&mut sess, &mut stream);
         tls.write(&bytes)?;
-        match read_from_stream(tls) {
-            Ok(result) => Ok(Response::from_string(result)),
-            Err(err) => Err(err),
-        }
+        Ok(Response::from_stream(tls))
     }
 
     /// Sends the [`Request`](struct.Request.html), consumes this
@@ -71,23 +68,11 @@ impl Connection {
         // Send request
         let mut stream = BufWriter::new(tcp);
         stream.write_all(&bytes)?;
-
-        // Receive response
-        let tcp = stream.into_inner()?;
-        let mut stream = BufReader::new(tcp);
-        match read_from_stream(&mut stream) {
-            Ok(response) => Ok(Response::from_string(response)),
-            Err(err) => match err.kind() {
-                ErrorKind::WouldBlock | ErrorKind::TimedOut => Err(Error::new(
-                    ErrorKind::TimedOut,
-                    format!("Request timed out! Timeout: {:?}",
-                            stream.get_ref().read_timeout()),
-                )),
-                _ => Err(err),
-            },
-        }
+        Ok(Response::from_stream(stream.into_inner()?))
     }
 }
+
+
 
 fn create_tcp_stream(host: String, timeout: Option<u64>) -> Result<TcpStream, Error> {
     let stream = TcpStream::connect(host)?;
@@ -97,54 +82,4 @@ fn create_tcp_stream(host: String, timeout: Option<u64>) -> Result<TcpStream, Er
         stream.set_write_timeout(dur)?;
     }
     Ok(stream)
-}
-
-/// Reads the stream until it can't or it reaches the end of the HTTP
-/// response.
-fn read_from_stream<T: Read>(stream: T) -> Result<String, Error> {
-    let mut response = String::new();
-    let mut response_length = None;
-    let mut byte_count = 0;
-    let mut blank_line = false;
-
-    for byte in stream.bytes() {
-        let byte = byte?;
-        let c = byte as char;
-        response.push(c);
-        byte_count += 1;
-        if c == '\n' {
-            // End of line, try to get the response length
-            if blank_line && response_length.is_none() {
-                response_length = Some(get_response_length(response.clone()));
-            }
-            blank_line = true;
-        } else if c != '\r' {
-            // Normal character, reset blank_line
-            blank_line = false;
-        }
-
-        if let Some(len) = response_length {
-            if byte_count == len {
-                // We have reached the end of the HTTP
-                // response, break the reading loop.
-                break;
-            }
-        }
-    }
-
-    Ok(response)
-}
-
-/// Tries to find out how long the whole response will eventually be,
-/// in bytes.
-fn get_response_length(response: String) -> usize {
-    // The length of the headers
-    let mut byte_count = 0;
-    for line in response.lines() {
-        byte_count += line.len() + 2;
-        if line.starts_with("Content-Length: ") {
-            byte_count += line.clone()[16..].parse::<usize>().unwrap();
-        }
-    }
-    byte_count
 }
