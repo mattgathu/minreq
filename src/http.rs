@@ -9,6 +9,7 @@ use std::io::Error;
 pub type URL = String;
 
 /// An HTTP request method.
+#[derive(Clone, Debug)]
 pub enum Method {
     /// The GET method
     Get,
@@ -53,6 +54,7 @@ impl fmt::Display for Method {
 }
 
 /// An HTTP request.
+#[derive(Clone, Debug)]
 pub struct Request {
     method: Method,
     pub(crate) host: URL,
