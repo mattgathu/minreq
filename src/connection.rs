@@ -1,12 +1,12 @@
-use std::io::{BufWriter, Error,  Write};
-use std::net::TcpStream;
-use std::time::Duration;
 use crate::http::{Request, Response};
 #[cfg(feature = "https")]
 use rustls::{self, ClientConfig, ClientSession};
 use std::env;
+use std::io::{BufReader, BufWriter, Error, Write};
+use std::net::TcpStream;
 #[cfg(feature = "https")]
 use std::sync::Arc;
+use std::time::Duration;
 #[cfg(feature = "https")]
 use webpki::DNSNameRef;
 #[cfg(feature = "https")]
@@ -24,12 +24,12 @@ impl Connection {
     /// [`Request`](struct.Request.html) for specifics about *what* is
     /// being sent.
     pub(crate) fn new(request: Request) -> Connection {
-        let timeout = request.timeout.or_else(|| {
-            match env::var("MINREQ_TIMEOUT") {
+        let timeout = request
+            .timeout
+            .or_else(|| match env::var("MINREQ_TIMEOUT") {
                 Ok(t) => t.parse::<u64>().ok(),
-                Err(_) => None
-            }
-        });
+                Err(_) => None,
+            });
         Connection { request, timeout }
     }
 
@@ -48,11 +48,11 @@ impl Connection {
         config
             .root_store
             .add_server_trust_anchors(&TLS_SERVER_ROOTS);
-        let mut sess = ClientSession::new(&Arc::new(config), dns_name);
+        let sess = ClientSession::new(&Arc::new(config), dns_name);
 
         // IO
-        let mut stream = create_tcp_stream(host, self.timeout)?;
-        let mut tls = rustls::Stream::new(&mut sess, &mut stream);
+        let stream = create_tcp_stream(host, self.timeout)?;
+        let mut tls = rustls::StreamOwned::new(sess, stream);
         tls.write(&bytes)?;
         Ok(Response::from_stream(tls))
     }
@@ -68,11 +68,10 @@ impl Connection {
         // Send request
         let mut stream = BufWriter::new(tcp);
         stream.write_all(&bytes)?;
-        Ok(Response::from_stream(stream.into_inner()?))
+        let buf = BufReader::new(stream.into_inner()?);
+        Ok(Response::from_stream(buf))
     }
 }
-
-
 
 fn create_tcp_stream(host: String, timeout: Option<u64>) -> Result<TcpStream, Error> {
     let stream = TcpStream::connect(host)?;

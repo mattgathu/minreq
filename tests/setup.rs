@@ -91,7 +91,11 @@ pub fn url(req: &str) -> String {
 
 pub fn get_body(request: Result<minreq::Response, Error>) -> String {
     match request {
-        Ok(response) => String::from(response.body.trim()),
+        Ok(mut response) => {
+            let mut s = String::new();
+            response.body.read_to_string(&mut s).unwrap();
+            s
+        }
         Err(err) => {
             println!("\n[ERROR]: {}\n", err);
             String::new()

@@ -1,10 +1,9 @@
+use crate::connection::Connection;
 use std::collections::HashMap;
 use std::fmt;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::io::Error;
-use std::io::Read;
-use crate::connection::Connection;
-use failure::{Fallible, bail};
-use std::net::TcpStream;
 
 /// A URL type for requests.
 pub type URL = String;
@@ -89,6 +88,13 @@ impl Request {
         self
     }
 
+    /// Adds headers to the request.
+    pub fn with_headers(mut self, headers: &HashMap<String, String>) -> Request {
+        for (k, v) in headers.iter() {
+            self.headers.insert(k.to_string(), v.to_string());
+        }
+        self
+    }
     /// Sets the request body.
     pub fn with_body<T: Into<String>>(mut self, body: T) -> Request {
         let body = body.into();
@@ -154,40 +160,30 @@ pub struct Response {
     /// The headers of the response.
     pub headers: HashMap<String, String>,
     /// The body of the response.
-    pub body: TcpStream,
+    pub body: Box<BufRead>,
 }
 
 impl Response {
-
-    pub (crate) fn from_stream(stream: TcpStream) -> Response {
-        parse_response(stream).unwrap()
-    }
-}
-
-fn parse_response(stream: TcpStream) -> Fallible<Response> {
+    pub(crate) fn from_stream<T: std::io::Read + 'static>(stream: T) -> Response {
+        let mut stream = BufReader::new(stream);
         // get http status line
-        let (status_code, reason_phrase) = parse_status_line(&read_http_status_line(&stream)?);
+        let mut s = String::new();
+        stream.read_line(&mut s).unwrap();
+        let (status_code, reason_phrase) = parse_status_line(&s);
         // get http headers
-        let headers = parse_headers(read_http_headers(&stream)?).unwrap();
-        //
-        // rest is body
-        let resp = Response {
-            status_code,
-            reason_phrase,
-            headers,
-            body: stream
-        };
+        let mut buf: Vec<String> = Vec::new();
+        loop {
+            let mut s = String::new();
+            stream.read_line(&mut s).unwrap();
+            if s.trim().is_empty() {
+                break;
+            } else {
+                buf.push(s.trim().to_string());
+            }
+        }
 
-        Ok(resp)
-
-}
-
-fn parse_headers(s: String) -> Fallible<HashMap<String, String>> {
-    let headers = s.trim();
-
-    if headers.lines().all(|e| e.contains(':')) {
-        let headers: HashMap<String, String> = headers
-            .lines()
+        let headers: HashMap<String, String> = buf
+            .iter()
             .map(|elem| {
                 let idx = elem.find(": ").unwrap();
                 let (key, value) = elem.split_at(idx);
@@ -195,35 +191,17 @@ fn parse_headers(s: String) -> Fallible<HashMap<String, String>> {
             })
             .collect();
 
-        Ok(headers)
-    } else {
-        bail!("error parsing")
+        let resp = Response {
+            status_code,
+            reason_phrase,
+            headers,
+            body: Box::new(stream),
+        };
+
+        resp
     }
 }
 
-fn read_http_status_line<T: Read>(stream: T) -> Result<String, Error> {
-    let mut buf: Vec<u8> = Vec::new();
-
-    for b in stream.bytes() {
-        buf.push(b?);
-        if buf.len() > 5 && &buf[(buf.len() - 2)..] == b"\r\n" {
-            break;
-        }
-    }
-    Ok(String::from_utf8(buf).unwrap())
-}
-
-fn read_http_headers<T: Read>(stream: T) -> Result<String, Error> {
-    let mut buf: Vec<u8> = Vec::new();
-
-    for b in stream.bytes() {
-        buf.push(b?);
-        if buf.len() > 5 && &buf[(buf.len() - 2)..] == b"\r\n\r\n" {
-            break;
-        }
-    }
-    Ok(String::from_utf8(buf).unwrap())
-}
 
 
 fn parse_url(url: URL) -> (URL, URL, bool) {
@@ -252,7 +230,7 @@ fn parse_url(url: URL) -> (URL, URL, bool) {
     (first, second, https)
 }
 
-pub (crate) fn parse_status_line(line: &str) -> (i32, String) {
+pub(crate) fn parse_status_line(line: &str) -> (i32, String) {
     let mut split = line.split(" ");
     if let Some(code) = split.nth(1) {
         if let Ok(code) = code.parse::<i32>() {
