@@ -54,7 +54,7 @@ impl Connection {
         let stream = create_tcp_stream(host, self.timeout)?;
         let mut tls = rustls::StreamOwned::new(sess, stream);
         tls.write(&bytes)?;
-        Ok(Response::from_stream(tls))
+        Ok(Response::from_stream(tls)?)
     }
 
     /// Sends the [`Request`](struct.Request.html), consumes this
@@ -69,7 +69,7 @@ impl Connection {
         let mut stream = BufWriter::new(tcp);
         stream.write_all(&bytes)?;
         let buf = BufReader::new(stream.into_inner()?);
-        Ok(Response::from_stream(buf))
+        Ok(Response::from_stream(buf)?)
     }
 }
 

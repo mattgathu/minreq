@@ -166,17 +166,17 @@ pub struct Response {
 }
 
 impl Response {
-    pub(crate) fn from_stream<T: std::io::Read + 'static>(stream: T) -> Response {
+    pub(crate) fn from_stream<T: std::io::Read + 'static>(stream: T) -> std::io::Result<Response> {
         let mut stream = BufReader::new(stream);
         // get http status line
         let mut s = String::new();
-        stream.read_line(&mut s).unwrap();
+        stream.read_line(&mut s)?;
         let (status_code, reason_phrase) = parse_status_line(&s);
         // get http headers
         let mut buf: Vec<String> = Vec::new();
         loop {
             let mut s = String::new();
-            stream.read_line(&mut s).unwrap();
+            stream.read_line(&mut s)?;
             if s.trim().is_empty() {
                 break;
             } else {
@@ -200,7 +200,7 @@ impl Response {
             body: Box::new(stream),
         };
 
-        resp
+        Ok(resp)
     }
 }
 

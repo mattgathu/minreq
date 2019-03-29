@@ -27,6 +27,6 @@ failure = "0.1"
 tiny_http = "0.6"
 
 [features]
-default = []
+default = ["https"]
 
 https = ["rustls", "webpki-roots", "webpki"]
