@@ -204,7 +204,15 @@ impl Response {
     }
 }
 
-
+impl fmt::Debug for Response {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Response{{ status_code: {}, reason_phrase: {}, headers: {:#?}, body: <BufRead> }}",
+            self.status_code, self.reason_phrase, self.headers
+        )
+    }
+}
 
 fn parse_url(url: URL) -> (URL, URL, bool) {
     let mut first = URL::new();
