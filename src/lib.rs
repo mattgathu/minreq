@@ -96,6 +96,7 @@ extern crate webpki_roots;
 mod requests;
 mod http;
 mod connection;
+mod decoder;
 
 pub use requests::*;
 pub use http::*;

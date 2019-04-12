@@ -1,12 +1,17 @@
-use crate::connection::Connection;
 use std::collections::HashMap;
 use std::fmt;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Error;
 
+use crate::connection::Connection;
+use crate::decoder::Decoder;
+
 /// A URL type for requests.
 pub type URL = String;
+
+/// A Headers type alias
+pub type Headers = HashMap<String, String>;
 
 /// An HTTP request method.
 #[derive(Clone, Debug)]
@@ -59,7 +64,7 @@ pub struct Request {
     method: Method,
     pub(crate) host: URL,
     resource: URL,
-    headers: HashMap<String, String>,
+    headers: Headers,
     body: Option<String>,
     pub(crate) timeout: Option<u64>,
     https: bool,
@@ -76,7 +81,7 @@ impl Request {
             method,
             host,
             resource,
-            headers: HashMap::new(),
+            headers: Headers::new(),
             body: None,
             timeout: None,
             https,
@@ -91,7 +96,7 @@ impl Request {
     }
 
     /// Adds headers to the request.
-    pub fn with_headers(mut self, headers: &HashMap<String, String>) -> Request {
+    pub fn with_headers(mut self, headers: &Headers) -> Request {
         for (k, v) in headers.iter() {
             self.headers.insert(k.to_string(), v.to_string());
         }
@@ -160,9 +165,9 @@ pub struct Response {
     /// The reason phrase of the response, eg. "Not Found".
     pub reason_phrase: String,
     /// The headers of the response.
-    pub headers: HashMap<String, String>,
+    pub headers: Headers,
     /// The body of the response.
-    pub body: Box<BufRead>,
+    pub body: Decoder,
 }
 
 impl Response {
@@ -184,7 +189,7 @@ impl Response {
             }
         }
 
-        let headers: HashMap<String, String> = buf
+        let mut headers: Headers = buf
             .iter()
             .map(|elem| {
                 let idx = elem.find(": ").unwrap();
@@ -196,8 +201,8 @@ impl Response {
         let resp = Response {
             status_code,
             reason_phrase,
+            body: Decoder::detect(&mut headers, stream),
             headers,
-            body: Box::new(stream),
         };
 
         Ok(resp)

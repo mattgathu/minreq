@@ -2,6 +2,7 @@ extern crate minreq;
 extern crate tiny_http;
 use std::thread;
 use std::io::Error;
+use std::io::Read;
 use std::sync::{Once, ONCE_INIT};
 use std::time::Duration;
 use std::sync::Arc;
