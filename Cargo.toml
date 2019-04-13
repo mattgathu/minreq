@@ -1,6 +1,8 @@
 [package]
 name = "mrq"
 version = "0.1.0"
+authors = ["Matt Gathu <mattgathu@gmail.com>"]
+repository = "https://github.com/mattgathu/minreq"
 description = "Simple, minimal-dependency HTTP client"
 readme = "README.md"
 keywords = ["http", "https", "client", "request"]
