@@ -1,4 +1,4 @@
-//! # Minreq
+//! # mrq
 //! Simple, minimal-dependency HTTP client.
 //! The library has a very minimal API, so you'll probably know
 //! everything you need to after reading a few examples.
@@ -12,7 +12,7 @@
 //! Cargo.toml's `[dependencies]` part to something like the
 //! following:
 //! ```toml
-//! minreq = { version = "1.0.0", features = ["https"] }
+//! mrq = { version = "0.1.0", features = ["https"] }
 //! ```
 //!
 //! # Examples
@@ -21,7 +21,7 @@
 //! ```no_run
 //! // This is a simple example of sending a GET request and
 //! // printing out the response.
-//! if let Ok(response) = minreq::get("http://httpbin.org/ip").send() {
+//! if let Ok(response) = mrq::get("http://httpbin.org/ip").send() {
 //!     println!("{}", response.body);
 //! }
 //! ```
@@ -29,7 +29,7 @@
 //! ## Body
 //! ```no_run
 //! // To include a body, add .with_body("") before .send().
-//! if let Ok(response) = minreq::post("http://httpbin.org/post")
+//! if let Ok(response) = mrq::post("http://httpbin.org/post")
 //!     .with_body("Pong!")
 //!     .send()
 //! {
@@ -40,7 +40,7 @@
 //! ## Headers
 //! ```no_run
 //! // To add a header, add .with_header("Key", "Value") before .send().
-//! if let Ok(response) = minreq::get("http://httpbin.org/headers")
+//! if let Ok(response) = mrq::get("http://httpbin.org/headers")
 //!     .with_header("Accept", "text/plain")
 //!     .with_header("Something", "Interesting")
 //!     .send()
@@ -54,7 +54,7 @@
 //! // To avoid timing out, or limit the request's response time even more,
 //! // use .with_timeout(n) before .send(). The given value is in seconds.
 //! // NOTE: There is no timeout by default.
-//! if let Ok(response) = minreq::post("http://httpbin.org/delay/6")
+//! if let Ok(response) = mrq::post("http://httpbin.org/delay/6")
 //!     .with_timeout(10)
 //!     .send()
 //! {
@@ -68,20 +68,20 @@
 //!   [`with_timeout`](struct.Request.html#method.with_timeout)
 //!   on it to set the timeout per-request like so:
 //!   ```
-//!   minreq::get("/").with_timeout(8).send();
+//!   mrq::get("/").with_timeout(8).send();
 //!   ```
-//! - Set the environment variable `MINREQ_TIMEOUT` to the desired
+//! - Set the environment variable `mrq_TIMEOUT` to the desired
 //!   amount of seconds until timeout. Ie. if you have a program called
-//!   `foo` that uses minreq, and you want all the requests made by that
+//!   `foo` that uses mrq, and you want all the requests made by that
 //!   program to timeout in 8 seconds, you launch the program like so:
 //!   ```text,ignore
-//!   $ MINREQ_TIMEOUT=8 ./foo
+//!   $ mrq_TIMEOUT=8 ./foo
 //!   ```
 //!   Or add the following somewhere before the requests in the code.
 //!   ```
 //!   use std::env;
 //!
-//!   env::set_var("MINREQ_TIMEOUT", "8");
+//!   env::set_var("mrq_TIMEOUT", "8");
 //!   ```
 
 #![deny(missing_docs)]

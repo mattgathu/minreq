@@ -1,4 +1,4 @@
-extern crate minreq;
+extern crate mrq;
 extern crate tiny_http;
 use std::thread;
 use std::io::Error;
@@ -89,7 +89,7 @@ pub fn url(req: &str) -> String {
     format!("http://0.0.0.0:35562{}", req)
 }
 
-pub fn get_body(res: Result<minreq::Response, Error>) -> String {
+pub fn get_body(res: Result<mrq::Response, Error>) -> String {
     match res {
         Ok(mut response) => {
             let mut s = String::new();
@@ -103,7 +103,7 @@ pub fn get_body(res: Result<minreq::Response, Error>) -> String {
     }
 }
 
-pub fn get_status_code(resp: Result<minreq::Response, Error>) -> i32 {
+pub fn get_status_code(resp: Result<mrq::Response, Error>) -> i32 {
     match resp {
         Ok(response) => i32::from(&response.status),
         Err(err) => {
