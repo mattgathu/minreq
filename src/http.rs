@@ -8,6 +8,67 @@ use std::io::Error;
 /// A URL type for requests.
 pub type URL = String;
 
+
+/// An HTTP Response Status
+#[derive(Clone, Debug)]
+pub enum Status {
+    /// Informational: 1XX
+    Info(i32),
+    /// Success: 2XX
+    Success(i32),
+    /// Redirections: 3XX
+    Redirect(i32),
+    /// Client Errors: 4XX
+    ClientError(i32),
+    /// Server Errors: 5XX
+    ServerError(i32),
+}
+
+impl Status {
+    /// check is status is a success
+    pub fn is_success(&self) -> bool {
+        match self {
+            Status::Success(_) => true,
+            _ => false,
+        }
+    }
+}
+
+impl From<i32> for Status {
+    fn from(i: i32) -> Self {
+        if i >= 100 && i < 200 {
+            Status::Info(i)
+        } else if i >= 200 && i < 300 {
+            Status::Success(i)
+        } else if i >= 300 && i < 400 {
+            Status::Redirect(i)
+        } else if i >= 400 && i < 500 {
+            Status::ClientError(i)
+        } else {
+            Status::ServerError(i)
+        }
+    }
+}
+
+impl From<&Status> for i32 {
+    fn from(s: &Status) -> i32 {
+        match *s {
+            Status::Info(i) => i,
+            Status::Success(i) => i,
+            Status::Redirect(i) => i,
+            Status::ClientError(i) => i,
+            Status::ServerError(i) => i,
+        }
+    }
+}
+
+impl fmt::Display for Status {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let code: i32 = i32::from(self);
+        write!(f, "{}", code)
+    }
+}
+
 /// An HTTP request method.
 #[derive(Clone, Debug)]
 pub enum Method {
@@ -38,17 +99,17 @@ impl fmt::Display for Method {
     /// Formats the Method to the form in the HTTP request,
     /// ie. Method::Get -> "GET", Method::Post -> "POST", etc.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &Method::Get => write!(f, "GET"),
-            &Method::Head => write!(f, "HEAD"),
-            &Method::Post => write!(f, "POST"),
-            &Method::Put => write!(f, "PUT"),
-            &Method::Delete => write!(f, "DELETE"),
-            &Method::Connect => write!(f, "CONNECT"),
-            &Method::Options => write!(f, "OPTIONS"),
-            &Method::Trace => write!(f, "TRACE"),
-            &Method::Patch => write!(f, "PATCH"),
-            &Method::Custom(ref s) => write!(f, "{}", s),
+        match *self {
+            Method::Get => write!(f, "GET"),
+            Method::Head => write!(f, "HEAD"),
+            Method::Post => write!(f, "POST"),
+            Method::Put => write!(f, "PUT"),
+            Method::Delete => write!(f, "DELETE"),
+            Method::Connect => write!(f, "CONNECT"),
+            Method::Options => write!(f, "OPTIONS"),
+            Method::Trace => write!(f, "TRACE"),
+            Method::Patch => write!(f, "PATCH"),
+            Method::Custom(ref s) => write!(f, "{}", s),
         }
     }
 }
@@ -58,11 +119,11 @@ impl fmt::Display for Method {
 pub struct Request {
     method: Method,
     pub(crate) host: URL,
-    resource: URL,
+    pub(crate) resource: URL,
     headers: HashMap<String, String>,
-    body: Option<String>,
+    pub(crate) body: Option<String>,
     pub(crate) timeout: Option<u64>,
-    https: bool,
+    pub(crate) https: bool,
 }
 
 impl Request {
@@ -147,7 +208,7 @@ impl Request {
         // Add the body
         http += "\r\n";
         if let Some(body) = self.body {
-            http += &format!("{}", body);
+            http += &body;
         }
         http
     }
@@ -156,7 +217,7 @@ impl Request {
 /// An HTTP response.
 pub struct Response {
     /// The status code of the response, eg. 404.
-    pub status_code: i32,
+    pub status: Status,
     /// The reason phrase of the response, eg. "Not Found".
     pub reason_phrase: String,
     /// The headers of the response.
@@ -171,7 +232,7 @@ impl Response {
         // get http status line
         let mut s = String::new();
         stream.read_line(&mut s)?;
-        let (status_code, reason_phrase) = parse_status_line(&s);
+        let (status, reason_phrase) = parse_status_line(&s);
         // get http headers
         let mut buf: Vec<String> = Vec::new();
         loop {
@@ -187,14 +248,14 @@ impl Response {
         let headers: HashMap<String, String> = buf
             .iter()
             .map(|elem| {
-                let idx = elem.find(": ").unwrap();
+                let idx = elem.find(':').unwrap();
                 let (key, value) = elem.split_at(idx);
-                (key.to_string(), value[2..].to_string())
+                (key.to_string(), value[1..].trim().to_string())
             })
             .collect();
 
         let resp = Response {
-            status_code,
+            status,
             reason_phrase,
             headers,
             body: Box::new(stream),
@@ -209,12 +270,12 @@ impl fmt::Debug for Response {
         write!(
             f,
             "Response{{ status_code: {}, reason_phrase: {}, headers: {:#?}, body: <BufRead> }}",
-            self.status_code, self.reason_phrase, self.headers
+            self.status, self.reason_phrase, self.headers
         )
     }
 }
 
-fn parse_url(url: URL) -> (URL, URL, bool) {
+pub(crate) fn parse_url(url: URL) -> (URL, URL, bool) {
     let mut first = URL::new();
     let mut second = URL::new();
     let mut slashes = 0;
@@ -229,25 +290,25 @@ fn parse_url(url: URL) -> (URL, URL, bool) {
         }
     }
     // Ensure the resource is *something*
-    if second.len() == 0 {
+    if second.is_empty() {
         second += "/";
     }
     // Set appropriate port
     let https = url.starts_with("https://");
-    if !first.contains(":") {
+    if !first.contains(':') {
         first += if https { ":443" } else { ":80" };
     }
     (first, second, https)
 }
 
-pub(crate) fn parse_status_line(line: &str) -> (i32, String) {
-    let mut split = line.split(" ");
+pub(crate) fn parse_status_line(line: &str) -> (Status, String) {
+    let mut split = line.split(' ');
     if let Some(code) = split.nth(1) {
         if let Ok(code) = code.parse::<i32>() {
             if let Some(reason) = split.next() {
-                return (code, reason.to_string());
+                return (Status::from(code), reason.to_string());
             }
         }
     }
-    (503, "Server did not provide a status line".to_string())
+    (Status::from(503), "Server did not provide a status line".to_string())
 }

@@ -89,8 +89,8 @@ pub fn url(req: &str) -> String {
     format!("http://0.0.0.0:35562{}", req)
 }
 
-pub fn get_body(request: Result<minreq::Response, Error>) -> String {
-    match request {
+pub fn get_body(res: Result<minreq::Response, Error>) -> String {
+    match res {
         Ok(mut response) => {
             let mut s = String::new();
             response.body.read_to_string(&mut s).unwrap();
@@ -103,9 +103,9 @@ pub fn get_body(request: Result<minreq::Response, Error>) -> String {
     }
 }
 
-pub fn get_status_code(request: Result<minreq::Response, Error>) -> i32 {
-    match request {
-        Ok(response) => response.status_code,
+pub fn get_status_code(resp: Result<minreq::Response, Error>) -> i32 {
+    match resp {
+        Ok(response) => i32::from(&response.status),
         Err(err) => {
             println!("\n[ERROR]: {}\n", err);
             -1
